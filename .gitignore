@@ -1,0 +1,10 @@
+*.npy
+*.pth
+*.log
+*.pyc
+.idea/*
+.idea/
+outputs/*
+data/*
+logs/*
+*.0

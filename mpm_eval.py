@@ -92,13 +92,14 @@ def tracking(net, device, file, images_url, cover):
         
         
 if __name__ == '__main__':
+    file = open('data/tracking.txt', 'w')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     net = MPMNet(n_channels=2, n_classes=3, bilinear=True)    
     net.load_state_dict(
             torch.load('outputs/2020-12-25/16-55-20/checkpoints/CP_epoch300.pth', map_location=device)
         )
     net.to(device)
-    file = open('data/tracking.txt', 'w')
+    
     images_url = '/home/siat/sdb/datasets/phc_c2c12/090318/MPM'
     gt_track = np.loadtxt('data/F0017.txt').astype('int')
     

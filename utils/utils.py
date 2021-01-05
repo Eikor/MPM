@@ -72,17 +72,87 @@ def RandomFlipper4MPM(seed, input, target):
         targetHV[:2] = -targetHV[:2]
         return inputHV, targetHV
 
+def getSyntheticImage(src1, rate1, src2, rate2, save_name=None):
+    src1 = get3chImage(src1)
+    src2 = get3chImage(src2)
+    out = src1 * rate1 + src2 * rate2
+    out[out > 255] = 255
+    out = out.astype("uint8")
+    if save_name is not None:
+        cv2.imwrite(save_name, out)
+    else:
+        return out
+    
+def chw_to_hwc(img):
+    return np.transpose(img, axes=[1, 2, 0])
 
+def tif_2_255(url):
+    import os
+    import numpy as np
+    import skimage.io as io
+    import matplotlib.pyplot as plt
+    from tqdm import tqdm
+    read_url = '/home/siat/sdb/datasets/phc_c2c12/090318/F0017'
+    write_url = '/home/siat/sdb/datasets/phc_c2c12/090318/MPM'
+    for img_name in tqdm(os.listdir(read_url)):
+        rurl_temp = os.path.join(read_url, img_name)
+        wurl_temp = os.path.join(write_url, img_name)
+        img = io.imread(rurl_temp)
+        img = (img / (np.max(img)) * 255).astype('uint8')
+        io.imsave(wurl_temp, img, check_contrast=False)
 
+def anno2label():
+    # change file name to 0000.tif ... xxxx.tif
+    from os import listdir, rename
+    from os.path import join
+    url = '/home/siat/projects/MICCAI2021/MPM-5908ed8bbcc7c5996287ffe49cc1d79b622cabfc/data_sample/train_imgs/F0018'
+    for f in listdir(url):
+        old_name = join(url, f)
+        new_name = join(url, '{:04d}.tif'.format(int(f[-8:-4]) - 600))
+        rename(old_name, new_name)
+
+def getdetection(pred, threshold):
+    # lenth of pred as the detection of cell 
+    detection = torch.norm(pred, dim=0).cpu().numpy()
+    
+    return peak_local_max(detection, min_distance=3, threshold_abs=threshold)  
+
+def renormalize(field, z_value):
+    '''
+
+    Parameters
+    ----------
+    field : tensor
+        normalized vector with shape of 2*H*W.
+    z_value : float.
+
+    Returns
+    -------
+    
+
+    '''
+    a = field[0]
+    sign_i = a < 0
+    b = field[1]
+    sign_j = b < 0
+    
+    z2 = np.square(np.ones_like(a)*z_value)
+    a2 = np.square(a)
+    b2 = np.square(b)
+    i = np.sqrt(a2 * z2 / (1 - b2 - a2))
+    i[sign_i] = -i[sign_i]
+    j = np.sqrt(b2 * z2 / (1 - b2 - a2))    
+    j[sign_j] = -j[sign_j]
+    
+    
+    
 
 def buildtrack(pred, threshold):
     track = []
     status = []
+
+    detection = getdetection(pred, threshold)
     
-    # lenth of pred as the detection of cell 
-    detection = torch.norm(pred, dim=0, keepdims=True).cpu().numpy()
-    
-    split_cell =     
     for label in np.unique(split_cell)[1:]:
         frame = []
         i, j = np.where(split_cell == label)
@@ -92,22 +162,15 @@ def buildtrack(pred, threshold):
     return track, status
     
 def updatetrack(pred, z_value, threshold, track, status):
-    detection = torch.norm(pred, dim=0, keepdims=True)
+    detection = getdetection(pred, threshold)
+    
+    field = pred[:2]
     field[:, detection > threshold] = field[:, detection > threshold] / detection[detection > threshold]
     
-    a = field[0]
-    sign_i = a < 0
-    b = field[1]
-    sign_j = b < 0
+
     
     # renormalize using z_value
-    z2 = np.square(np.ones_like(a)*z_value)
-    a2 = np.square(a)
-    b2 = np.square(b)
-    i = np.sqrt(a2 * z2 / (1 - b2 - a2))
-    i[sign_i] = -i[sign_i]
-    j = np.sqrt(b2 * z2 / (1 - b2 - a2))    
-    j[sign_j] = -j[sign_j]
+
     
     base_cord = np.meshgrid(range(a.shape[0]), range(a.shape[1]), indexing='ij')
     

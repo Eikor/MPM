@@ -10,22 +10,21 @@ Created on Tue Jan  5 15:43:13 2021
 import torch
 import numpy as np
 import cv2
-from networks import UNet
+from MPM_Net import MPMNet
 import matplotlib.pyplot as plt
-from utils import (
+from utils.utils import (
     chw_to_hwc,
     getImageTable,
     getSyntheticImage,
     get3chImage,
-    getVIDEO,
 )
 import os
+from os import listdir, path
 from scipy.ndimage.filters import gaussian_filter
 import colorsys
 import random
 import glob
 import matplotlib
-from pathlib import Path
 
 matplotlib.use("tkagg")
 
@@ -36,7 +35,8 @@ class CMP_TRACKER:
         IMAGE_NAMES (list):
     """
 
-    def __init__(self, image_names, unet_path, save_dir, mag_th, itv):
+    def __init__(self, image_names, unet_path, save_dir, mag_th, itv, device):
+        self.device = device
         self.IMAGE_NAMES = image_names
         self.UNET_PATH = unet_path
         self.MODEL = self.getUNet()
@@ -73,12 +73,13 @@ class CMP_TRACKER:
             f.write("magnitude threshold: {}\n".format(self.MAG_TH))
 
     def getUNet(self):
-        model = UNet_2d(n_channels=2, n_classes=3, sig=False)
+        model = MPMNet(n_channels=2, n_classes=3)
         model.cuda()
-        state_dict = torch.load(self.UNET_PATH, map_location="cpu")
+        state_dict = torch.load(self.UNET_PATH)
         #
         model.load_state_dict(state_dict)
         # model = torch.nn.DataParallel(model)
+        model.to(self.device)
         model.eval()
         return model
 
@@ -86,25 +87,17 @@ class CMP_TRACKER:
         imgs = []
         for name in names:
             img = cv2.imread(name, -1)
-            # img = np.load(name)
-            img = img / 4096
-            # img = img / 13132
-
-            # img = img[:512, :512]
-            # img = (img - img.min()) / (img.max() - img.min())
+            # same with training process
+            img = (img / (np.max(img)) * 255)
 
             imgs.append((img).astype("float32")[None, :, :])
         img = np.concatenate(imgs, axis=0)
-        img = torch.from_numpy(img).unsqueeze(0)
-        img = img.cuda()
+        img = torch.from_numpy(img).unsqueeze(0).cuda()
+
         output = self.MODEL(img)
         acm = output[0].cpu().detach().numpy()
         return chw_to_hwc(acm)
-        # img_name = Path(names[0])
-        # cmp = np.load(
-        #     f"/home/kazuya/main/correlation_test/images/Elmer_phase/CMP_gt/1/{img_name.stem}.npy"
-        # )[:512, :512].astype(np.float32)
-        # return cmp
+
 
     def getPeaks_getIndicatedPoints(self, acm):
         mag = np.sqrt(np.sum(np.square(acm), axis=-1))
@@ -695,22 +688,17 @@ class CMP_TRACKER:
         np.savetxt(os.path.join(self.LOG_DIR, "tracking.tree"), tree, fmt="%d")
 
 
-if __name__ == "__main__":
-    torch.cuda.set_device(0)
-    for seq in [15]:
-        for mode in ["_reject_new", "_reject_new1", "_reject_new2"]:
-            for itv in [1]:
-                demo = CMP_TRACKER(
-                    image_names=sorted(glob.glob(f"/home/kazuya/main/weakly_tracking/images/sequ{seq}/ori/*.tif"))[
-                        :780:itv
-                    ],
-                    # image_names=sorted(glob.glob(f"/home/kazuya/main/Hayashida/Elmer_phase/*.png"))[
-                    #             :780:itv
-                    #             ],
-                    # unet_path=f"./weights/CMP6_Elmer/temp.pth",
-                    unet_path=f"/home/kazuya/main/weight/CMP6_sequ{seq}{mode}/temp.pth",
-                    save_dir=f"./output/cmp_track/{mode}/sequ{seq}/result{itv}",
-                    mag_th=0.1,
-                    itv=1,
-                )
-                demo.TRACK()
+if __name__ == "__main__":   
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    images_url = '/home/siat/sdb/datasets/phc_c2c12/090318/MPM/'
+    itv = 1
+    
+    demo = CMP_TRACKER(
+        image_names = sorted(glob.glob(path.join(images_url, '*.tif')))[:780:itv],
+        unet_path = "./outputs/2020-12-25/16-55-20/checkpoints/CP_epoch300.pth",
+        save_dir = "./output/track",
+        mag_th = 0.1,
+        itv = 1,
+        device = device
+    )
+    demo.TRACK()

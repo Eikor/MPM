@@ -3,6 +3,8 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import torch
+from skimage.feature import peak_local_max
 
 
 def get3chImage(src):
@@ -71,11 +73,16 @@ def RandomFlipper4MPM(seed, input, target):
         return inputHV, targetHV
 
 
-def buildtrack(detection, threshold):
+
+
+def buildtrack(pred, threshold):
     track = []
     status = []
-    _, cells = cv2.threshold(detection, threshold, 255, cv2.THRESH_BINARY)
-    ret, split_cell = cv2.connectedComponents(cells.astype('uint8'))
+    
+    # lenth of pred as the detection of cell 
+    detection = torch.norm(pred, dim=0, keepdims=True).cpu().numpy()
+    
+    split_cell =     
     for label in np.unique(split_cell)[1:]:
         frame = []
         i, j = np.where(split_cell == label)
@@ -84,7 +91,8 @@ def buildtrack(detection, threshold):
         status.append(1)
     return track, status
     
-def updatetrack(field, detection, z_value, threshold, track, status):
+def updatetrack(pred, z_value, threshold, track, status):
+    detection = torch.norm(pred, dim=0, keepdims=True)
     field[:, detection > threshold] = field[:, detection > threshold] / detection[detection > threshold]
     
     a = field[0]

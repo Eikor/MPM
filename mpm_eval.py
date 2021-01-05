@@ -49,11 +49,7 @@ def tracking(net, device, file, images_url, cover):
     threshold = 1
     z_value = 5
     from utils.utils import buildtrack, updatetrack
-    # tracking array 
-    #       vec            loc                  pre_loc              
-    # mean(field)       above threshold       location after assign
 
-    
     '''
     tracks:
         - frames
@@ -67,11 +63,16 @@ def tracking(net, device, file, images_url, cover):
         X = torch.from_numpy(np.concatenate([i1[None, :], i2[None, :]], axis=0)).type(torch.FloatTensor).to(device)
         with torch.no_grad():
             pred = net(X.unsqueeze(0)).squeeze(0)
-        field = pred[:2, :, :].cpu().numpy()
-        detection = pred[2, :, :].cpu().numpy()
         
-        if idx == 0:
-            track, status = buildtrack(detection, threshold)
+        '''
+            pred: 
+                lenth is the cell probability
+                the first 2 channel is the transfer direction which normalized with z value 
+                
+        ''' 
+        
+        if idx == 0: # build track
+            track, status = buildtrack(pred, threshold)
         
         track, status = updatetrack(field, detection, z_value, threshold, track, status)
         
